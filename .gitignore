@@ -1,0 +1,14 @@
+.env
+demo-magic.sh
+artifacts/*
+shared/client/demo.env
+shared/client/known_hosts
+shared/client/config
+shared/server/ssh_host_ed25519_key
+shared/server/ssh_host_ed25519_key.pub
+shared/server/ssh_host_ed25519_key-cert.pub
+shared/server/trusted-user-ca-keys.pem
+!artifacts/.gitkeep
+!shared/.gitkeep
+!shared/client/.gitkeep
+!shared/server/.gitkeep

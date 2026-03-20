@@ -1,0 +1,68 @@
+services:
+  vault:
+    image: ${VAULT_IMAGE:-hashicorp/vault:latest}
+    container_name: vault-ssh-demo-vault
+    cap_add:
+      - IPC_LOCK
+    entrypoint:
+      - vault
+    command: server -config=/vault/config/vault.hcl
+    environment:
+      VAULT_LOG_LEVEL: info
+    ports:
+      - "${VAULT_PORT:-8200}:8200"
+    volumes:
+      - vault-data:/vault/file
+      - ./vault:/vault/config:ro
+      - ./shared:/demo
+    networks:
+      demo-network:
+        aliases:
+          - vault.demo.internal
+
+  linux-server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    container_name: vault-ssh-demo-server
+    hostname: server
+    volumes:
+      - ./shared:/demo
+    depends_on:
+      - vault
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -x sshd >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      demo-network:
+        aliases:
+          - server.demo.internal
+
+  linux-client:
+    build:
+      context: .
+      dockerfile: client/Dockerfile
+    container_name: vault-ssh-demo-client
+    hostname: client
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+      - ./shared:/demo
+    depends_on:
+      - vault
+      - linux-server
+    stdin_open: true
+    tty: true
+    networks:
+      demo-network:
+        aliases:
+          - client.demo.internal
+
+volumes:
+  vault-data:
+
+networks:
+  demo-network:
+    driver: bridge
