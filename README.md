@@ -38,7 +38,6 @@ Phase 2: user authentication
 ## Quick start
 
 ```bash
-cp .env.example .env
 make setup
 make verify
 ```
@@ -96,6 +95,78 @@ hostname
 whoami
 exit
 ```
+
+## Machine-to-machine SSH flow
+
+For machine-to-machine SSH, the basic pattern is the same as the human-user
+flow in this demo, but the client is a workload instead of a person.
+
+There is also a standalone visual explainer for this flow at
+`artifacts/vault-aws-ec2-machine-ssh-flow.html`. From the repo root on macOS,
+open it with:
+
+```bash
+open artifacts/vault-aws-ec2-machine-ssh-flow.html
+```
+
+End to end:
+
+1. The source machine keeps its own SSH private key locally.
+2. The source machine authenticates to Vault using a workload identity such as
+   Kubernetes, AppRole, AWS IAM, or another machine identity method.
+3. Vault checks policy and signs the machine's public key, returning a
+   short-lived SSH user certificate.
+4. The target server already trusts the Vault user CA through
+   `TrustedUserCAKeys`.
+5. The client connects and verifies the server's host certificate using the
+   Vault host CA.
+6. The client presents the signed user certificate and proves possession of the
+   matching private key.
+7. `sshd` checks the CA signature, principal, TTL, and extensions, then allows
+   or denies access.
+
+The main operational model is usually a relatively stable local keypair plus a
+short-lived Vault-issued certificate.
+
+### How host verification works
+
+When the client connects, it must first decide whether the server is really the
+intended host. In this demo, that trust comes from a host CA instead of from
+pinning one raw host key per machine.
+
+The flow is:
+
+- Vault signs the server's host public key
+- the server presents that host certificate during SSH
+- the client trusts the Vault host CA public key
+- the client verifies that the host certificate was signed by that CA, is still
+  valid, and includes the expected hostname such as `server.demo.internal`
+
+This is why the client can trust the server without learning one separate raw
+host key for each server.
+
+### What `known_hosts` is doing here
+
+In this demo, the client learns the Vault host CA public key from
+`~/.ssh/known_hosts`. The relevant entry has this shape:
+
+```text
+@cert-authority *.demo.internal <Vault host CA public key>
+```
+
+That line means:
+
+- `@cert-authority` says the key on the line is a CA key, not a normal host key
+- `*.demo.internal` is the hostname pattern this CA is allowed to vouch for
+- the final field is the Vault host CA public key itself
+
+So OpenSSH interprets the line as: trust host certificates for
+`*.demo.internal` if they were signed by this CA.
+
+In this repo, `init.sh` writes that entry into `shared/client/known_hosts`, and
+the client container links it to `~/.ssh/known_hosts`. In a real deployment,
+that CA trust is usually distributed through endpoint management, image baking,
+or config management instead of being edited by hand on every client.
 
 ## Protecting the client key
 
@@ -240,78 +311,6 @@ This is where Vault policy becomes visible on the credential itself. In this
 demo, for example, the certificate is signed by the Vault user CA, is only
 valid for a short period, is limited to the `demo` principal, and includes
 `permit-pty` so the user can open an interactive shell.
-
-## Machine-to-machine SSH flow
-
-For machine-to-machine SSH, the basic pattern is the same as the human-user
-flow in this demo, but the client is a workload instead of a person.
-
-There is also a standalone visual explainer for this flow at
-`artifacts/vault-aws-ec2-machine-ssh-flow.html`. From the repo root on macOS,
-open it with:
-
-```bash
-open artifacts/vault-aws-ec2-machine-ssh-flow.html
-```
-
-End to end:
-
-1. The source machine keeps its own SSH private key locally.
-2. The source machine authenticates to Vault using a workload identity such as
-   Kubernetes, AppRole, AWS IAM, or another machine identity method.
-3. Vault checks policy and signs the machine's public key, returning a
-   short-lived SSH user certificate.
-4. The target server already trusts the Vault user CA through
-   `TrustedUserCAKeys`.
-5. The client connects and verifies the server's host certificate using the
-   Vault host CA.
-6. The client presents the signed user certificate and proves possession of the
-   matching private key.
-7. `sshd` checks the CA signature, principal, TTL, and extensions, then allows
-   or denies access.
-
-The main operational model is usually a relatively stable local keypair plus a
-short-lived Vault-issued certificate.
-
-### How host verification works
-
-When the client connects, it must first decide whether the server is really the
-intended host. In this demo, that trust comes from a host CA instead of from
-pinning one raw host key per machine.
-
-The flow is:
-
-- Vault signs the server's host public key
-- the server presents that host certificate during SSH
-- the client trusts the Vault host CA public key
-- the client verifies that the host certificate was signed by that CA, is still
-  valid, and includes the expected hostname such as `server.demo.internal`
-
-This is why the client can trust the server without learning one separate raw
-host key for each server.
-
-### What `known_hosts` is doing here
-
-In this demo, the client learns the Vault host CA public key from
-`~/.ssh/known_hosts`. The relevant entry has this shape:
-
-```text
-@cert-authority *.demo.internal <Vault host CA public key>
-```
-
-That line means:
-
-- `@cert-authority` says the key on the line is a CA key, not a normal host key
-- `*.demo.internal` is the hostname pattern this CA is allowed to vouch for
-- the final field is the Vault host CA public key itself
-
-So OpenSSH interprets the line as: trust host certificates for
-`*.demo.internal` if they were signed by this CA.
-
-In this repo, `init.sh` writes that entry into `shared/client/known_hosts`, and
-the client container links it to `~/.ssh/known_hosts`. In a real deployment,
-that CA trust is usually distributed through endpoint management, image baking,
-or config management instead of being edited by hand on every client.
 
 ## Available commands
 
