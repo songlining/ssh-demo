@@ -96,6 +96,81 @@ whoami
 exit
 ```
 
+## Why use Vault SSH secrets engine
+
+The main business value is better SSH control with less credential sprawl.
+Instead of copying long-lived public keys into `authorized_keys` on many hosts,
+you let Vault issue short-lived SSH certificates under central policy.
+
+Typical benefits:
+
+- faster onboarding and offboarding because access is granted by Vault policy
+  instead of editing many servers by hand
+- lower risk from stolen laptops or leaked keys because a short-lived
+  certificate expires quickly
+- centralized rules for who can access what, for how long, and with which SSH
+  capabilities
+- a clean audit trail of certificate issuance in Vault
+- easier separation between production and non-production access
+- fewer stale keys and less `authorized_keys` drift on servers
+
+### Centralized rules for who can access what
+
+Without Vault, every server can become its own source of truth for SSH access.
+Different hosts may have different `authorized_keys` files, different local
+practices, and different levels of cleanup. Over time that creates drift.
+
+With Vault SSH certificates, the server usually trusts a small number of CA
+keys once, and Vault decides who is allowed to receive a certificate. That
+policy can include:
+
+- principals such as which Unix account may be used
+- TTL such as whether access lasts minutes or hours
+- extensions such as `permit-pty` or port forwarding permissions
+- environment-specific roles such as `dev-admin`, `prod-readonly`, or
+  break-glass access
+
+That changes the operational question from "does this host still have Alice's
+public key?" to "is Alice allowed to get a `prod-admin` certificate right now
+under policy?" That is much easier to govern, review, and audit consistently.
+
+### What an issued certificate looks like
+
+You can inspect a signed user certificate with:
+
+```bash
+ssh-keygen -Lf ~/.ssh/id_ed25519-cert.pub
+```
+
+Example shape:
+
+```text
+/home/demo/.ssh/id_ed25519-cert.pub:
+        Type: ssh-ed25519-cert-v01@openssh.com user certificate
+        Public key: ED25519-CERT SHA256:...
+        Signing CA: RSA SHA256:...
+        Key ID: "alice-prod-admin"
+        Serial: 660640397678247333
+        Valid: from 2026-03-25T23:25:59 to 2026-03-25T23:56:29
+        Principals:
+                demo
+        Critical Options: (none)
+        Extensions:
+                permit-pty
+```
+
+Important fields:
+
+- `Signing CA` shows which trusted CA signed the certificate
+- `Valid` shows the short-lived access window
+- `Principals` shows which login names the certificate may use
+- `Extensions` shows which SSH capabilities are allowed
+
+This is where Vault policy becomes visible on the credential itself. In this
+demo, for example, the certificate is signed by the Vault user CA, is only
+valid for a short period, is limited to the `demo` principal, and includes
+`permit-pty` so the user can open an interactive shell.
+
 ## Machine-to-machine SSH flow
 
 For machine-to-machine SSH, the basic pattern is the same as the human-user
@@ -236,81 +311,6 @@ That combination is often the best production pattern for human users:
 hardware-backed private key plus short-lived Vault-signed SSH certificates.
 Keep a backup security key enrolled as well so device loss does not lock you
 out.
-
-## Why use Vault SSH secrets engine
-
-The main business value is better SSH control with less credential sprawl.
-Instead of copying long-lived public keys into `authorized_keys` on many hosts,
-you let Vault issue short-lived SSH certificates under central policy.
-
-Typical benefits:
-
-- faster onboarding and offboarding because access is granted by Vault policy
-  instead of editing many servers by hand
-- lower risk from stolen laptops or leaked keys because a short-lived
-  certificate expires quickly
-- centralized rules for who can access what, for how long, and with which SSH
-  capabilities
-- a clean audit trail of certificate issuance in Vault
-- easier separation between production and non-production access
-- fewer stale keys and less `authorized_keys` drift on servers
-
-### Centralized rules for who can access what
-
-Without Vault, every server can become its own source of truth for SSH access.
-Different hosts may have different `authorized_keys` files, different local
-practices, and different levels of cleanup. Over time that creates drift.
-
-With Vault SSH certificates, the server usually trusts a small number of CA
-keys once, and Vault decides who is allowed to receive a certificate. That
-policy can include:
-
-- principals such as which Unix account may be used
-- TTL such as whether access lasts minutes or hours
-- extensions such as `permit-pty` or port forwarding permissions
-- environment-specific roles such as `dev-admin`, `prod-readonly`, or
-  break-glass access
-
-That changes the operational question from "does this host still have Alice's
-public key?" to "is Alice allowed to get a `prod-admin` certificate right now
-under policy?" That is much easier to govern, review, and audit consistently.
-
-### What an issued certificate looks like
-
-You can inspect a signed user certificate with:
-
-```bash
-ssh-keygen -Lf ~/.ssh/id_ed25519-cert.pub
-```
-
-Example shape:
-
-```text
-/home/demo/.ssh/id_ed25519-cert.pub:
-        Type: ssh-ed25519-cert-v01@openssh.com user certificate
-        Public key: ED25519-CERT SHA256:...
-        Signing CA: RSA SHA256:...
-        Key ID: "alice-prod-admin"
-        Serial: 660640397678247333
-        Valid: from 2026-03-25T23:25:59 to 2026-03-25T23:56:29
-        Principals:
-                demo
-        Critical Options: (none)
-        Extensions:
-                permit-pty
-```
-
-Important fields:
-
-- `Signing CA` shows which trusted CA signed the certificate
-- `Valid` shows the short-lived access window
-- `Principals` shows which login names the certificate may use
-- `Extensions` shows which SSH capabilities are allowed
-
-This is where Vault policy becomes visible on the credential itself. In this
-demo, for example, the certificate is signed by the Vault user CA, is only
-valid for a short period, is limited to the `demo` principal, and includes
-`permit-pty` so the user can open an interactive shell.
 
 ## Available commands
 
