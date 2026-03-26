@@ -124,10 +124,16 @@ echo "╚═══════════════════════�
 echo -e "${COLOR_RESET}"
 echo ""
 echo "Now the client proves its identity with a Vault-signed user certificate."
+echo "The certificate includes the permit-pty extension, so a real shell can open."
 echo ""
 
-p "# Log in with SSH and run a command on the target host"
-pe "docker compose exec -u demo linux-client bash -lc 'ssh server.demo.internal \"hostname && whoami\"'"
+p "# Open a real interactive SSH session to the target host"
+echo "When the remote shell opens, run:"
+echo "  hostname"
+echo "  whoami"
+echo "  exit"
+echo ""
+pe "docker compose exec -it -u demo linux-client bash -lc 'ssh server.demo.internal'"
 echo ""
 
 echo -e "${GREEN}Key points:${COLOR_RESET}"

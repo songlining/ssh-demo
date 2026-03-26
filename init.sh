@@ -102,7 +102,23 @@ if ! vault_exec "vault read ssh-host-signer/config/ca >/dev/null 2>&1"; then
   vault_exec "vault write ssh-host-signer/config/ca generate_signing_key=true >/dev/null"
 fi
 
-vault_exec "vault write ssh-client-signer/roles/demo-user key_type=ca allow_user_certificates=true allowed_users='${SSH_DEMO_USER}' default_user='${SSH_DEMO_USER}' ttl=30m >/dev/null"
+cat > "${ARTIFACTS_DIR}/ssh-client-role.json" <<EOF
+{
+  "key_type": "ca",
+  "allow_user_certificates": true,
+  "allowed_users": "${SSH_DEMO_USER}",
+  "default_user": "${SSH_DEMO_USER}",
+  "allowed_extensions": "permit-pty",
+  "default_extensions": {
+    "permit-pty": ""
+  },
+  "ttl": "30m"
+}
+EOF
+
+cp "${ARTIFACTS_DIR}/ssh-client-role.json" "${SHARED_DIR}/ssh-client-role.json"
+vault_exec "vault write ssh-client-signer/roles/demo-user @/demo/ssh-client-role.json >/dev/null"
+rm -f "${ARTIFACTS_DIR}/ssh-client-role.json" "${SHARED_DIR}/ssh-client-role.json"
 vault_exec "vault write ssh-host-signer/roles/demo-host key_type=ca allow_host_certificates=true allowed_domains='${SSH_DEMO_DOMAIN}' allow_subdomains=true allow_bare_domains=true ttl=24h >/dev/null"
 
 echo -e "${BLUE}🔧 Publishing trust anchors...${NC}"
@@ -164,3 +180,4 @@ echo "  4. ssh-keygen -t ed25519 -N '' -f ~/.ssh/id_ed25519"
 echo "  5. vault write -field=signed_key ssh-client-signer/sign/demo-user \\"
 echo "       public_key=@\$HOME/.ssh/id_ed25519.pub valid_principals=${SSH_DEMO_USER} > \$HOME/.ssh/id_ed25519-cert.pub"
 echo "  6. ssh ${SERVER_FQDN}"
+echo "     # inside the remote shell: hostname && whoami"
