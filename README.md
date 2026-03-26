@@ -247,11 +247,11 @@ For machine-to-machine SSH, the basic pattern is the same as the human-user
 flow in this demo, but the client is a workload instead of a person.
 
 There is also a standalone visual explainer for this flow at
-`~/.agent/diagrams/vault-aws-ec2-machine-ssh-flow.html`. On macOS, open it
-with:
+`artifacts/vault-aws-ec2-machine-ssh-flow.html`. From the repo root on macOS,
+open it with:
 
 ```bash
-open ~/.agent/diagrams/vault-aws-ec2-machine-ssh-flow.html
+open artifacts/vault-aws-ec2-machine-ssh-flow.html
 ```
 
 End to end:
