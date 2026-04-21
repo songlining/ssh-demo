@@ -176,6 +176,30 @@ valid for a short period, is limited to the `demo` principal, and includes
 For machine-to-machine SSH, the basic pattern is the same as the human-user
 flow in this demo, but the client is a workload instead of a person.
 
+```mermaid
+sequenceDiagram
+  autonumber
+  participant W as EC2 workload / SSH client
+  participant I as IMDSv2
+  participant V as Vault
+  participant T as Target sshd
+
+  W->>I: Fetch temporary instance-profile credentials
+  I-->>W: Short-lived AWS credentials
+  W->>V: AWS IAM login
+  Note over V: Vault validates signed STS identity proof and returns a Vault token
+  V-->>W: Vault token scoped to SSH signing
+  W->>W: Keep local private key on source host
+  W->>V: Request short-lived SSH user cert for deploy principal
+  V-->>W: Signed SSH user certificate
+  W->>T: Start SSH connection using private key plus cert
+  Note over W,T: Source machine trusts the Vault host CA through known_hosts
+  W->>T: Verify host certificate for target name
+  Note over T: sshd trusts the Vault user CA through TrustedUserCAKeys
+  W->>T: Present SSH user cert and prove key possession
+  T-->>W: Allow session if CA, principal, TTL, and extensions match
+```
+
 There is also a standalone visual explainer for this flow at
 `artifacts/vault-aws-ec2-machine-ssh-flow.html`. From the repo root on macOS,
 open it with:
