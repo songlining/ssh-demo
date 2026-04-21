@@ -193,7 +193,7 @@ sequenceDiagram
   W->>V: Request short-lived SSH user cert for deploy principal
   V-->>W: Signed SSH user certificate
   W->>T: Start SSH connection using private key plus cert
-  Note over W,T: Source machine trusts the Vault host CA through known_hosts
+  Note over W,T: SSH client machine trusts the Vault host CA through known_hosts
   W->>T: Verify host certificate for target name
   Note over T: sshd trusts the Vault user CA through TrustedUserCAKeys
   W->>T: Present SSH user cert and prove key possession
